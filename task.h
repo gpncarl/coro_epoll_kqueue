@@ -4,7 +4,6 @@
 #include <iostream>
 
 using std::coroutine_handle;
-using std::suspend_always;
 using std::suspend_never;
 
 template<typename T> struct task;
@@ -15,7 +14,7 @@ template<typename T>
 struct promise_type_base {
     coroutine_handle<> continuation_ = std::noop_coroutine(); // who waits on this coroutine
     task<T> get_return_object();
-    suspend_always initial_suspend() { return {}; }
+    suspend_never initial_suspend() { return {}; }
 
     struct final_awaiter {
         bool await_ready() noexcept { return false; }
@@ -40,7 +39,7 @@ template<typename T>
 struct promise_type final: promise_type_base<T> {
     T result;
     void return_value(T value) { result = value; }
-    T await_resule() { return result; }
+    T await_resume() { return result; }
     task<T> get_return_object();
 };
 
@@ -59,21 +58,22 @@ struct task {
     task():handle_(nullptr){}
     task(coroutine_handle<promise_type> handle):handle_(handle){}
     bool await_ready() { return false; }
-    T await_resume() {
-        return handle_.promise().result;
-    }
+    T await_resume();
 
     void await_suspend(coroutine_handle<> waiter) {
         handle_.promise().continuation_ = waiter;
-        handle_.resume();
-    }
-
-    void resume() {
-        handle_.resume();
     }
 
     coroutine_handle<promise_type> handle_;
 };
+
+template<typename T>
+inline T task<T>::await_resume() {
+    return handle_.promise().result;
+}
+
+template<>
+inline void task<void>::await_resume() {}
 
 namespace detail {
 template<typename T>
